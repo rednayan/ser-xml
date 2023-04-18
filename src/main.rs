@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 use xml::reader::{EventReader, XmlEvent};
 
@@ -81,6 +81,9 @@ fn read_entire_xml_file<P: AsRef<Path>>(file_path: P) -> io::Result<String> {
     Ok(content)
 }
 
+type TermFreq = HashMap<String, usize>;
+type TermFreqIndex = HashMap<PathBuf, TermFreq>;
+
 fn main() -> io::Result<()> {
     //benchmark
     let start = Instant::now();
@@ -88,16 +91,19 @@ fn main() -> io::Result<()> {
 
     let dir_path = "docs.gl/gl4";
     let dir = fs::read_dir(dir_path)?;
+    let top_n = 20;
+    let mut tf_index = TermFreqIndex::new();
 
     for file in dir {
         let file_path = file?.path();
-        let content = read_entire_xml_file(&file_path)?;
-        println!("{file_path:?} -> {size}", size = content.len());
+
+        println!("Indexing {:?}...", &file_path);
+
         let content = read_entire_xml_file(&file_path)?
             .chars()
             .collect::<Vec<_>>();
 
-        let mut tf = HashMap::<String, usize>::new();
+        let mut tf = TermFreq::new();
         for token in Lexer::new(&content) {
             let term = token
                 .iter()
@@ -114,14 +120,16 @@ fn main() -> io::Result<()> {
         stats.sort_by_key(|(_, f)| *f);
         stats.reverse();
 
-        for (t, f) in stats.iter().take(20) {
-            println!("    {t} => {f}");
-        }
+        tf_index.insert(file_path, tf);
     }
+    let index_path = "index.json";
+    println!("saving {index_path:?}");
+    let index_file = File::create(index_path)?;
+    serde_json::to_writer(index_file, &tf_index).expect("serde works fine");
 
     //--------------------------//
     //benchmark
-    let duration = start.elapsed();
-    println!("benchmark: {duration} ms ", duration = duration.as_millis());
+    let duration = start.elapsed().as_millis();
+    println!("benchmark: {duration} ms");
     Ok(())
 }
