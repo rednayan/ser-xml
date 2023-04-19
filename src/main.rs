@@ -85,6 +85,19 @@ type TermFreq = HashMap<String, usize>;
 type TermFreqIndex = HashMap<PathBuf, TermFreq>;
 
 fn main() -> io::Result<()> {
+    let index_path = "index.json";
+    let index_file = File::open(index_path)?;
+    println!("Reading {index_path} index file...");
+    let tf_index: TermFreqIndex = serde_json::from_reader(index_file).expect("serde does not fail");
+
+    println!(
+        "{index_path} contains {count_files}",
+        count_files = tf_index.len()
+    );
+    Ok(())
+}
+
+fn main2() -> io::Result<()> {
     //benchmark
     let start = Instant::now();
     //-------------------------//
