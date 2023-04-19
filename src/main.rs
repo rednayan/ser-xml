@@ -1,7 +1,9 @@
 use std::collections::HashMap;
+use std::env;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::process::exit;
 use std::time::Instant;
 use xml::reader::{EventReader, XmlEvent};
 
@@ -84,8 +86,7 @@ fn read_entire_xml_file<P: AsRef<Path>>(file_path: P) -> io::Result<String> {
 type TermFreq = HashMap<String, usize>;
 type TermFreqIndex = HashMap<PathBuf, TermFreq>;
 
-fn main() -> io::Result<()> {
-    let index_path = "index.json";
+fn check_index(index_path: &str) -> io::Result<()> {
     let index_file = File::open(index_path)?;
     println!("Reading {index_path} index file...");
     let tf_index: TermFreqIndex = serde_json::from_reader(index_file).expect("serde does not fail");
@@ -97,14 +98,9 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-fn main2() -> io::Result<()> {
-    //benchmark
-    let start = Instant::now();
-    //-------------------------//
-
-    let dir_path = "docs.gl/gl4";
+fn index_folder(dir_path: &str) -> io::Result<()> {
     let dir = fs::read_dir(dir_path)?;
-    let top_n = 20;
+    let _top_n = 20;
     let mut tf_index = TermFreqIndex::new();
 
     for file in dir {
@@ -139,6 +135,51 @@ fn main2() -> io::Result<()> {
     println!("saving {index_path:?}");
     let index_file = File::create(index_path)?;
     serde_json::to_writer(index_file, &tf_index).expect("serde works fine");
+    Ok(())
+}
+
+fn main() {
+    let mut args = env::args();
+
+    let _program_path = args.next().expect("path to program exists");
+
+    let subcommand = args.next().unwrap_or_else(|| {
+        eprintln!("ERROR: no subcommand is provided");
+        exit(1)
+    });
+
+    match subcommand.as_str() {
+        "index" => {
+            let dir_path = args.next().unwrap_or_else(|| {
+                eprintln!("ERROR: directory path not provided");
+                exit(1)
+            });
+
+            index_folder(&dir_path).unwrap_or_else(|err| {
+                eprintln!("ERROR: could not index folder :{err}");
+            })
+        }
+
+        "search" => {
+            let index_path = args.next().unwrap_or_else(|| {
+                eprintln!("ERROR: no file path is provided");
+                exit(1)
+            });
+            check_index(&index_path).unwrap_or_else(|err| {
+                eprintln!("ERROR: could not check index file {index_path} : {err}");
+                exit(1)
+            });
+        }
+        _ => {
+            eprintln!("ERROR: unknown subcommand: {subcommand}")
+        }
+    }
+}
+
+fn main2() -> io::Result<()> {
+    //benchmark
+    let start = Instant::now();
+    //-------------------------//
 
     //--------------------------//
     //benchmark
