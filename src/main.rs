@@ -139,6 +139,10 @@ fn index_folder(dir_path: &str) -> io::Result<()> {
 }
 
 fn main() {
+    //benchmark
+    let start = Instant::now();
+    //------------------------------//
+
     let mut args = env::args();
 
     let _program_path = args.next().expect("path to program exists");
@@ -151,7 +155,7 @@ fn main() {
     match subcommand.as_str() {
         "index" => {
             let dir_path = args.next().unwrap_or_else(|| {
-                eprintln!("ERROR: directory path not provided");
+                eprintln!("ERROR: no directory path is not provided");
                 exit(1)
             });
 
@@ -174,16 +178,9 @@ fn main() {
             eprintln!("ERROR: unknown subcommand: {subcommand}")
         }
     }
-}
 
-fn main2() -> io::Result<()> {
-    //benchmark
-    let start = Instant::now();
-    //-------------------------//
-
-    //--------------------------//
+    //..........................................................//
     //benchmark
     let duration = start.elapsed().as_millis();
     println!("benchmark: {duration} ms");
-    Ok(())
 }
