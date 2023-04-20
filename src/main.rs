@@ -3,7 +3,7 @@ use std::env;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::exit;
+use std::process::{exit, ExitCode};
 use std::time::Instant;
 use xml::reader::{EventReader, XmlEvent};
 
@@ -138,49 +138,43 @@ fn index_folder(dir_path: &str) -> io::Result<()> {
     Ok(())
 }
 
-fn main() {
-    //benchmark
-    let start = Instant::now();
-    //------------------------------//
-
+fn entry() -> Result<(), ()> {
     let mut args = env::args();
 
     let _program_path = args.next().expect("path to program exists");
 
-    let subcommand = args.next().unwrap_or_else(|| {
+    let subcommand = args.next().ok_or_else(|| {
         eprintln!("ERROR: no subcommand is provided");
-        exit(1)
-    });
+    })?;
 
     match subcommand.as_str() {
         "index" => {
-            let dir_path = args.next().unwrap_or_else(|| {
+            let dir_path = args.next().ok_or_else(|| {
                 eprintln!("ERROR: no directory path is not provided");
-                exit(1)
-            });
+            })?;
 
-            index_folder(&dir_path).unwrap_or_else(|err| {
-                eprintln!("ERROR: could not index folder :{err}");
-            })
+            index_folder(&dir_path).unwrap();
+            Ok(())
         }
 
         "search" => {
-            let index_path = args.next().unwrap_or_else(|| {
+            let index_path = args.next().ok_or_else(|| {
                 eprintln!("ERROR: no file path is provided");
-                exit(1)
-            });
-            check_index(&index_path).unwrap_or_else(|err| {
-                eprintln!("ERROR: could not check index file {index_path} : {err}");
-                exit(1)
-            });
+            })?;
+
+            check_index(&index_path).unwrap();
+            Ok(())
         }
         _ => {
-            eprintln!("ERROR: unknown subcommand: {subcommand}")
+            eprintln!("ERROR: unknown subcommand: {subcommand}");
+            return Err(());
         }
     }
+}
 
-    //..........................................................//
-    //benchmark
-    let duration = start.elapsed().as_millis();
-    println!("benchmark: {duration} ms");
+fn main() -> ExitCode {
+    match entry() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(()) => ExitCode::FAILURE,
+    }
 }
