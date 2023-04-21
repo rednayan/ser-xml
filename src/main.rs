@@ -3,8 +3,8 @@ use std::env;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{exit, ExitCode};
-use std::time::Instant;
+use std::process::ExitCode;
+use xml::common::{Position, TextPosition};
 use xml::reader::{EventReader, XmlEvent};
 
 #[derive(Debug)]
@@ -69,18 +69,35 @@ fn index_document(doc_content: &str) -> HashMap<String, usize> {
     todo!("not implemented")
 }
 
-fn read_entire_xml_file<P: AsRef<Path>>(file_path: P) -> io::Result<String> {
-    let file = File::open(file_path)?;
+fn parse_entire_xml_file(file_path: &Path) -> Option<String> {
+    let file = File::open(file_path)
+        .map_err(|err| {
+            eprintln!(
+                "ERRORcould not open file {file_path}: {err}",
+                file_path = file_path.display()
+            );
+        })
+        .ok()?;
 
     let er = EventReader::new(file);
     let mut content = String::new();
     for event in er.into_iter() {
-        if let XmlEvent::Characters(text) = event.expect("TODO") {
+        let event = event
+            .map_err(|err| {
+                let TextPosition { row, column } = err.position();
+                let msg = err.msg();
+                eprintln!(
+                    "{file_path}:{row}:{column}: ERROR:{msg}",
+                    file_path = file_path.display()
+                );
+            })
+            .ok()?;
+        if let XmlEvent::Characters(text) = event {
             content.push_str(&text);
             content.push_str(" ");
         }
     }
-    Ok(content)
+    Some(content)
 }
 
 type TermFreq = HashMap<String, usize>;
@@ -103,14 +120,19 @@ fn index_folder(dir_path: &str) -> io::Result<()> {
     let _top_n = 20;
     let mut tf_index = TermFreqIndex::new();
 
-    for file in dir {
+    'next_file: for file in dir {
         let file_path = file?.path();
+
+        if file_path.is_dir() {
+            index_folder(file_path.to_str().unwrap())?;
+        }
 
         println!("Indexing {:?}...", &file_path);
 
-        let content = read_entire_xml_file(&file_path)?
-            .chars()
-            .collect::<Vec<_>>();
+        let content = match parse_entire_xml_file(&file_path) {
+            Some(content) => content.chars().collect::<Vec<_>>(),
+            None => continue 'next_file,
+        };
 
         let mut tf = TermFreq::new();
         for token in Lexer::new(&content) {
@@ -131,10 +153,12 @@ fn index_folder(dir_path: &str) -> io::Result<()> {
 
         tf_index.insert(file_path, tf);
     }
+
     let index_path = "index.json";
     println!("saving {index_path:?}");
     let index_file = File::create(index_path)?;
     serde_json::to_writer(index_file, &tf_index).expect("serde works fine");
+
     Ok(())
 }
 
